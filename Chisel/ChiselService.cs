@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Timers;
 using Loggly;
@@ -31,12 +32,12 @@ namespace Chisel
                         try
                         {
                             var result = gatherer.GatherLogs();
-                            Console.WriteLine("Gatherer: {0}, Count: {1}, LastLogEntryTime: {2}",
-                                              gatherer.GetType().Name,
-                                              result.Logs.Count(),
-                                              result.LastLogEntryTime.HasValue
-                                                  ? result.LastLogEntryTime.Value.ToString()
-                                                  : "N/A");
+                            Trace.WriteLine(string.Format("Gatherer: {0}, Count: {1}, LastLogEntryTime: {2}",
+                                                          gatherer.GetType().Name,
+                                                          result.Logs.Count(),
+                                                          result.LastLogEntryTime.HasValue
+                                                              ? result.LastLogEntryTime.Value.ToString()
+                                                              : "N/A"));
                             foreach (var log in result.Logs)
                             {
                                 logger.Log(JsonConvert.SerializeObject(log), true);
@@ -46,7 +47,7 @@ namespace Chisel
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine(ex.ToString());
+                            Trace.WriteLine(ex.ToString());
                         }
                         timer.Enabled = true;
                     };
