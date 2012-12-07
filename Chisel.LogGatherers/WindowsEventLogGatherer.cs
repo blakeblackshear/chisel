@@ -20,8 +20,8 @@ namespace Chisel.LogGatherers
         private const string WindowsLogQuery = @"<QueryList>
                                   <Query Id=""0"" Path=""Application"">
                                     <Select Path=""Application"">*[System[(Level=1  or Level=2 or Level=3 or Level=4 or Level=0) and TimeCreated[@SystemTime&gt;'{0}']]]</Select>
-                                    <Select Path=""Setup"">*[System[(Level=1  or Level=2 or Level=3 or Level=4 or Level=0) and TimeCreated[@SystemTime&gt;'{0}']]]</Select>
                                     <Select Path=""Security"">*[System[(Level=1  or Level=2 or Level=3 or Level=4 or Level=0) and TimeCreated[@SystemTime&gt;'{0}']]]</Select>
+                                    <Select Path=""Setup"">*[System[(Level=1  or Level=2 or Level=3 or Level=4 or Level=0) and TimeCreated[@SystemTime&gt;'{0}']]]</Select>
                                     <Select Path=""System"">*[System[(Level=1  or Level=2 or Level=3 or Level=4 or Level=0) and TimeCreated[@SystemTime&gt;'{0}']]]</Select>
                                   </Query>
                                 </QueryList>";
@@ -87,20 +87,37 @@ namespace Chisel.LogGatherers
             underObject["Devicename"] = record.MachineName.ToUpper();
             underObject["EventTime"] = record.TimeCreated.Value.ToUniversalTime().ToString("o");
             underObject["EventId"] = record.Id.ToString();
-            underObject["Level"] = record.Level.HasValue ? ((int) record.Level.Value).ToString() : string.Empty;
-            underObject["User"] = record.UserId != null ? record.UserId.Translate(typeof (NTAccount)).ToString() : "N/A";
+            underObject["Level"] = record.Level.HasValue ? ((int)record.Level.Value).ToString() : string.Empty;
+            underObject["User"] = record.UserId != null ? record.UserId.Translate(typeof(NTAccount)).ToString() : "N/A";
             underObject["ProviderName"] = record.ProviderName;
-            underObject["Description"] = record.FormatDescription();
-            var root = XElement.Parse(record.ToXml());
-            XNamespace x = "http://schemas.microsoft.com/win/2004/08/events/event";
-            var dataNodes = root.Descendants(x + "Data")
-                                .Where(e => e.HasAttributes && e.Attributes().Any(a => a.Name == "Name"));
-            foreach (var node in dataNodes)
+
+            // if SQL Audit Event
+            if (record.Id == 33205)
             {
-                var key = node.Attributes().First(a => a.Name == "Name").Value;
-                if (!underObject.ContainsKey(key))
+                var entries = record.FormatDescription().Replace("Audit event: ", "").Split(new[] {'\n'});
+                foreach (var entry in entries)
                 {
-                    underObject.Add(key, node.Value);
+                    var colon = entry.IndexOf(':');
+                    if (colon != -1)
+                    {
+                        underObject.Add(entry.Substring(0, colon), entry.Substring(colon + 1, entry.Length - colon - 1));
+                    }
+                }
+            }
+            else
+            {
+                underObject["Description"] = record.FormatDescription();
+                var root = XElement.Parse(record.ToXml());
+                XNamespace x = "http://schemas.microsoft.com/win/2004/08/events/event";
+                var dataNodes = root.Descendants(x + "Data")
+                                    .Where(e => e.HasAttributes && e.Attributes().Any(a => a.Name == "Name"));
+                foreach (var node in dataNodes)
+                {
+                    var key = node.Attributes().First(a => a.Name == "Name").Value;
+                    if (!underObject.ContainsKey(key))
+                    {
+                        underObject.Add(key, node.Value);
+                    }
                 }
             }
 
