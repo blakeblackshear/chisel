@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Dynamic;
 using System.IO;
+using System.Linq;
 using MSUtil;
 
 namespace Chisel.LogGatherers
@@ -12,6 +13,7 @@ namespace Chisel.LogGatherers
         private static object _threadlock;
         private readonly string lastSavedFile;
         private readonly string logLocation;
+        private readonly string[] filters;
 
         public double IntervalMilliseconds { get; private set; }
         public DateTime LastLogEntrySent
@@ -40,6 +42,8 @@ namespace Chisel.LogGatherers
             logLocation = ConfigurationManager.AppSettings["IisLogLocation"];
             if (ConfigurationManager.AppSettings["IisLogInterval"] == null) throw new ConfigurationErrorsException("Missing IisLogInterval in AppSettings");
             IntervalMilliseconds = double.Parse(ConfigurationManager.AppSettings["IisLogInterval"]);
+            if (ConfigurationManager.AppSettings["IisLogFilters"] == null) throw new ConfigurationErrorsException("Missing IisLogFilters in AppSettings");
+            filters = ConfigurationManager.AppSettings["IisLogFilters"].Split(new[] {';'});
         }
 
         public GatherResult GatherLogs()
@@ -66,8 +70,19 @@ namespace Chisel.LogGatherers
                 underObject.Add("Source", "IisLog");
                 underObject.Add("Devicename", Environment.MachineName);
                 var record = results.getRecord();
+                var filtered = false;
                 for (var i = 0; i < columnCount; ++i)
                 {
+                    if (columnNames[i] == "cs(User-Agent)")
+                    {
+                        var userAgent = (string)record.getValue(i);
+                        if (filters.Any(f => userAgent.IndexOf(f) != -1))
+                        {
+                            filtered = true;
+                            break;
+                        };
+                    }
+
                     if (columnNames[i] == "EventTime")
                     {
                         var eventDate = DateTime.Parse(((DateTime)record.getValue(i)).ToString("o") + "Z").ToUniversalTime();
@@ -79,7 +94,8 @@ namespace Chisel.LogGatherers
                         underObject.Add(columnNames[i], record.getValue(i));
                     }
                 }
-                dynamicResults.Add(underObject);
+                if(!filtered)
+                    dynamicResults.Add(underObject);
                 results.moveNext();
             }
             return new GatherResult
